@@ -30,7 +30,7 @@ You need to set up both the client and server for the Speakr service to function
 #### Client Setup
 
 - Navigate to the client directory:
-Note: The provided client is meant to serve as a reference for developers to understand how to establish a connection with Speakr using React.js. It is not mandatory to use this client you can create your own implementation or integrate Speakr directly into your server-side code.
+- Note: The provided client is meant to serve as a reference for developers to understand how to establish a connection with Speakr using React.js. It is not mandatory to use this client you can create your own implementation or integrate Speakr directly into your server-side code.
 
 ```bash
 cd client
@@ -53,7 +53,7 @@ npm start
 - Navigate to the server directory:
 
 ```bash
-cd client
+cd server
 ```
 
 - Install dependencies:
@@ -70,13 +70,25 @@ npm start
 
 ## Speakr WebSocket Protocol
 
+To initialize the Speakr connection and start streaming the audio buffer, follow these steps:
+
 To communicate with the Speakr service, the developer must adhere to certain WebSocket protocols and event handling.
 
-### What you have to provide
+### Make the connection
 
-#### Starting the Connection
+```javascript
+const WebSocket = require("ws");
+const socket = new WebSocket(`wss://api.speakr.online/v2v?api_key=${api_key}`);
+```
 
-To initialize the Speakr connection and start streaming the audio buffer, follow these steps:
+Upon a successful connection, the server will send :
+
+```json
+{
+  "type": "initial",
+  "msg": "connected"
+}
+```
 
 - Send the Start Message: The client must first send a message to initiate the connection, passing necessary parameters such as temperature, prefixPadding, silenceDuration, threshold, and a system_prompt. You can structure the message like this:
 
@@ -94,9 +106,18 @@ To initialize the Speakr connection and start streaming the audio buffer, follow
 }
 ```
 
+- Once the connection is initilized after receiving the start message and seting up all the required paramaters, you will receive:
+
+```json
+{
+  "type": "ready",
+  "msg": "connected"
+}
+```
+
 #### Send Audio Buffer
 
-After sending the "start" message, the client needs to stream the audio buffer to the server. The audio buffer should be sent as binary data, and the server will process it. You can use the following code to send the buffer:
+- After sending the "start" message, the client needs to stream the audio buffer to the server. The audio buffer should be sent as binary data, and the server will process it. You can use the following code to send the buffer:
 
 ```jsvascript
   socket.send(audioBuffer);
@@ -104,7 +125,8 @@ After sending the "start" message, the client needs to stream the audio buffer t
 
 #### Sending Status Updates
 
-While sending the audio buffer status (i.e., session and sequence details), send the following message:
+- While sending the audio buffer status (i.e., session and sequence details), send the following message:
+- This message is used for managing the chathistory, you have to send the sequence id of the buffer which is played and session id for which the buffer is received
 
 ```json
 {
@@ -127,40 +149,6 @@ Close the connection
 }
 ```
 
-### What you will get
-
-### Make the connection
-
-```javascript
-const socket = new WebSocket(
-  `wss://api.speakr.online/v2v?api_key=${api_key}`
-);
-```
-
-#### Connection Established
-
-Upon a successful connection, the server will send:
-
-```json
-{
-  "type": "initial",
-  "msg": "connected"
-}
-```
-
-#### Ready State
-
-Once the connection is fully ready after sending the start message and all the required paramaters, you will receive:
-
-```json
-{
-  "type": "ready",
-  "msg": "connected"
-}
-```
-
-#### Audio Buffer
-
 When an audio buffer is received from Speakr, you can verify the message using the Buffer module:
 
 ```javascript
@@ -180,7 +168,7 @@ In case of invalid API key or balance issues, Speakr will send an information me
 
 #### Interruption Event
 
-You may receive an event to indicate an interruption:
+You will receive a clear event when there is an interruption. Upon receiving this message, you can clear the previously sent buffer and begin playing the upcoming buffer :
 
 ```json
 {
