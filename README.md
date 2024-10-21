@@ -30,6 +30,7 @@ You need to set up both the client and server for the Speakr service to function
 #### Client Setup
 
 - Navigate to the client directory:
+Note: The provided client is meant to serve as a reference for developers to understand how to establish a connection with Speakr using React.js. It is not mandatory to use this client you can create your own implementation or integrate Speakr directly into your server-side code.
 
 ```bash
 cd client
