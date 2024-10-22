@@ -16,7 +16,7 @@ const audio_stream = (wss) => {
     }
     // Make websocket connection with speakr
     const socket = new WebSocket(
-      `wss://4416-2409-40d6-27-2f3-b5e0-66b5-7e1-213f.ngrok-free.app/v2v?api_key=${api_key}`
+      `wss://api.speakr.online/v2v?api_key=${api_key}`
     );
 
     // Events from the client
@@ -100,7 +100,13 @@ const audio_stream = (wss) => {
           const bufferWithoutMetadata = message.slice(metadataEndIndex + 1);
           if (bufferWithoutMetadata.length <= 0) return;
 
-          wss.send(message);
+          // Depending on your logic, you can choose whether to handle the status part on the server side or client side.
+
+          // Option 1: Send buffer with metadata (session_id, sequence_id) to handle tracking on the server
+          wss.send(messageWithMetadata);
+
+          // Option 2: Send buffer without metadata if tracking or status handling is managed by the client
+          // wss.send(bufferWithoutMetadata);
         } else if (typeof message === "string") {
           const { type, msg } = JSON.parse(message);
 

@@ -90,7 +90,8 @@ Upon a successful connection, the server will send :
 }
 ```
 
-- Send the Start Message: The client must first send a message to initiate the connection, passing necessary parameters such as temperature, prefixPadding, silenceDuration, threshold, and a system_prompt. You can structure the message like this:
+- Send the Start Message:
+- The client must first send a message to initiate the connection, passing necessary parameters such as temperature, prefixPadding, silenceDuration, threshold, and a system_prompt. You can structure the message like this:
 
 ```json
 {
@@ -106,7 +107,7 @@ Upon a successful connection, the server will send :
 }
 ```
 
-- Once the connection is initilized after receiving the start message and seting up all the required paramaters, you will receive:
+- Once the connection is initialized after receiving the start message and setting up all the required paramaters, you will receive:
 
 ```json
 {
@@ -115,18 +116,22 @@ Upon a successful connection, the server will send :
 }
 ```
 
-#### Send Audio Buffer
+#### Send Audio Buffer to speakr
 
-- After sending the "start" message, the client needs to stream the audio buffer to the server. The audio buffer should be sent as binary data, and the server will process it. You can use the following code to send the buffer:
+- After sending the "start" message, the client needs to stream the audio buffer to the server as binary data, which the server will process.
+- The audio buffer should be encoded in Linear16 format with a sample rate of 8000 Hz and a buffer size of 256 bytes.
 
-```jsvascript
+```javascript
+  // Audio encoding: Linear16 (16-bit linear PCM)
+  // Sample rate: 8000 Hz
+  // Buffer size: 256 bytes
   socket.send(audioBuffer);
 ```
 
-#### Sending Status Updates
+#### Sending Status Updates to speakr
 
-- While sending the audio buffer status (i.e., session and sequence details), send the following message:
-- This message is used for managing the chathistory, you have to send the sequence id of the buffer which is played and session id for which the buffer is received
+- You must include the sequence_id of the buffer that was played and the session_id corresponding to the session from which the buffer was received.
+- When sending the audio buffer along with status information (i.e., session and sequence details), use the following message format:
 
 ```json
 {
@@ -138,7 +143,7 @@ Upon a successful connection, the server will send :
 }
 ```
 
-#### End the Connection
+#### Send this message to the speakr for ending the connection
 
 Close the connection
 
@@ -149,13 +154,44 @@ Close the connection
 }
 ```
 
-When an audio buffer is received from Speakr, you can verify the message using the Buffer module:
+#### Audio buffer received from speakr
+
+- When an audio buffer is received from Speakr, you can verify the message using the Buffer module:
+- You will receive the session_id and sequence_id of the buffer encoded in the buffer
+
+#### Code if you want to send the buffer with the session_id and sequence_id :
+
+- If you implement the code of detecting which buffer is played on the client side then you can send the buffer with the metadata and can decode it in the client side.
+- You can take help from the client provided in the repo.
 
 ```javascript
-Buffer.isBuffer(socketMessage);
+if (Buffer.isBuffer(message)) {
+  toClient.send(message);
+}
 ```
 
-#### API Key Information
+#### If you want to send the buffer without the session_id and sequence_id :
+
+- If you implement the code of detecting which buffer is played on the server side(if you are working with Twilio like providers) then you can send the buffer without the metadata and can use Twilio mark functionality for detecting which buffer is played on the client mobile.
+- When you the get played session_id and sequence_id you can send then to speakr using the status event.
+
+```javascript
+if (Buffer.isBuffer(message)) {
+  const bytes = new Uint8Array(message);
+  const metadataEndIndex = bytes.indexOf(0);
+  const metadataString = new TextDecoder().decode(
+    bytes.slice(0, metadataEndIndex)
+  );
+  const { session_id, sequence_id } = JSON.parse(metadataString);
+
+  const bufferWithoutMetadata = message.slice(metadataEndIndex + 1);
+  if (bufferWithoutMetadata.length <= 0) return;
+
+  toClient.send(bufferWithoutMetadata);
+}
+```
+
+#### API Key Information received from speakr
 
 In case of invalid API key or balance issues, Speakr will send an information message:
 
@@ -166,9 +202,9 @@ In case of invalid API key or balance issues, Speakr will send an information me
 }
 ```
 
-#### Interruption Event
+#### Interruption Event received from speakr
 
-You will receive a clear event when there is an interruption. Upon receiving this message, you can clear the previously sent buffer and begin playing the upcoming buffer :
+You will receive a clear event when there is an interruption. Upon receiving this message, you can clear the previously sent buffer and begin playing the upcoming buffers :
 
 ```json
 {
@@ -177,9 +213,10 @@ You will receive a clear event when there is an interruption. Upon receiving thi
 }
 ```
 
-#### Connection Closed
+#### After the Connection is Closed successfully speakr will send this event
 
-When the connection is terminated, you will receive:
+- When the connection is terminated, you will receive:
+- Later on you will receive the credits used for this connection in the msg
 
 ```json
 {
