@@ -103,7 +103,7 @@ const audio_stream = (wss) => {
           // Depending on your logic, you can choose whether to handle the status part on the server side or client side.
 
           // Option 1: Send buffer with metadata (session_id, sequence_id) to handle tracking on the server
-          wss.send(messageWithMetadata);
+          wss.send(message);
 
           // Option 2: Send buffer without metadata if tracking or status handling is managed by the client
           // wss.send(bufferWithoutMetadata);
