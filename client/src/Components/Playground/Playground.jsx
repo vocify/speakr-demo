@@ -164,7 +164,7 @@ const Playground = () => {
             temperature: temperature,
             silenceDuration: silenceDuration,
             voice: selectedVoice?.value,
-            voice_provider : "style",
+            voice_provider : "speakr_eng_v1",
             threshold: threshold,
             system_prompt: system_prompt,
             sessionId: session,
