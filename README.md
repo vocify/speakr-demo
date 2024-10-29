@@ -95,9 +95,9 @@ Upon a successful connection, the server will send :
 - To initiate the connection, the client must send a message with the required parameters: `temperature`, `voice`, `silenceDuration`, `threshold`, and a `system_prompt`. Below is the structured format for the message:
 
 #### Parameters:
-- **temperature**: Range 0 to 1 (ideal: 0.5)
+- **temperature**: Range 0 to 1 (ideal: 0.7)
 - **voice**: Options are either `"jill"` or `"jack"`
-- **silenceDuration**: Range 10ms to 1000ms (ideal: 500ms)
+- **silenceDuration**: Range 10ms to 1000ms (ideal: 100ms)
 - **threshold**: Range 0 to 1 (ideal: 0.5)
 - **system_prompt**: Provide the system prompt as a string
 - **sessionId**: A unique session identifier as a string
@@ -108,10 +108,10 @@ Upon a successful connection, the server will send :
 {
   "type": "start",
   "msg": JSON.stringify({
-    "temperature": <number>,           // Example: 0.5
+    "temperature": <number>,           // Example: 0.7
     "voice": <string>,                 // Example: "jill"
     "voice_provider": "speakr_eng_v1",         // Keep this value constant
-    "silenceDuration": <number>,       // Example: 500
+    "silenceDuration": <number>,       // Example: 100
     "threshold": <number>,             // Example: 0.5
     "system_prompt": <string>,         // Yor are a friendly AI assistant
     "sessionId": <string>              // Example: "12345"
