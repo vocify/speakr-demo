@@ -4,20 +4,20 @@
   flex-wrap: wrap;
   word-break: keep-all;
   color: white;
-  min-height: 100vh;
   overflow: hidden;
+  min-height: 100vh;
 }
 
 .container {
   background-color: rgb(32, 32, 32);
   display: flex;
+  min-height: 95vh;
+  max-width: 93vw;
   flex-direction: row;
   justify-content: space-between;
-  min-height: 92vh;
   padding: 10px 30px;
   font-family: Arial, sans-serif;
-  width: calc(100% - 60px);
-  max-height: 90vh;
+  width: 100%;
   border: 1px solid rgb(110, 110, 110);
   border-radius: 10px;
 }
@@ -66,21 +66,18 @@
     border-radius: 10px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
 
     ul {
       list-style: none;
       border-radius: 10px;
       padding: 5px;
       width: calc(100% - 20px);
-      display: flex;
-      justify-content: center;
       li {
         border-radius: 10px;
         margin: 5px auto;
         padding: 5px 15px;
         font-size: 16px;
-        width: calc(100% - 20px);
+        width: calc(100% - 30px);
         border: 1px solid transparent;
         display: flex;
         justify-content: space-between;
@@ -224,7 +221,6 @@
   border: 1px solid rgb(165, 165, 165);
   padding: 10px;
   border-radius: 10px;
-  overflow: hidden;
 
   textarea {
     width: calc(100% - 20px);
@@ -237,7 +233,6 @@
     text-decoration: none;
     font-weight: 700;
     overflow: scroll;
-    color: white;
   }
 
   textarea::placeholder {
@@ -334,25 +329,49 @@
   }
 }
 
+.clarbtn {
+  display: flex;
+  justify-content: flex-end;
+  button {
+    padding: 7px 10px;
+    background-color: #575757d7;
+    color: white;
+    border: none;
+    font-size: 1rem;
+    display: flex;
+    width: fit-content;
+    justify-content: center;
+    align-items: center;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .broom{
+    max-width: 20px;
+    max-height: 20px;
+    margin-right: 10px;
+  }
+
+  :hover {
+    background-color: #464646;
+  }
+}
+
 .startSession {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 30px;
-}
-
-.startSession {
   button {
     padding: 10px 20px;
     background-color: #01b1aed7;
     color: white;
     border: none;
     border-radius: 5px;
+    min-width: 100px;
     cursor: pointer;
-
-    button:hover {
-      background-color: #45a049;
-    }
+  }
+  :hover {
+    background-color: #00908ed7;
   }
 }
 
@@ -371,9 +390,13 @@
     width: 100%;
     padding: 0px;
   }
+
+  .marginclear{
+    margin-right: 20px;
+  }
   .nav {
     display: flex;
-    width: calc(100% - 20px);
+    width: 100%;
     padding: 10px 10px;
     font-size: 1rem;
     height: 50px;
@@ -410,7 +433,7 @@
     top: 0;
     right: 0;
     overflow: scroll;
-    width: calc(100% - 20px);
+    width: 100%;
     animation: slidein 1s ease;
 
     .contolsMobile {
@@ -427,7 +450,7 @@
     }
 
     textarea {
-      width: calc(100% - 20px);
+      width: 100%;
       min-height: 200px;
       outline: none;
       border-radius: 10px;

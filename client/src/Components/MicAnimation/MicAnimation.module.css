@@ -1,5 +1,6 @@
 .main{
     max-height: 150px;
+    animation: zerotohero 2s ease;
 }
 .main2{
     width: 150px;
@@ -50,7 +51,6 @@
     left: 60px;
     display: hidden;
     transform: scale(2);
-    cursor: pointer;
     color: white;
 }
 
@@ -69,3 +69,12 @@
     max-height: 30px;
     left: 60px;
 } 
+
+@keyframes zerotohero{
+    from{
+        opacity: 0;
+    }
+    to{
+        opacity: 1;
+    }
+}

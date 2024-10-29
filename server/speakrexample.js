@@ -40,20 +40,21 @@ const audio_stream = (wss) => {
           console.log({ type, msg });
 
           switch (type) {
-            case "start": // It is for starting the buffer and it should have the metadata
-              // Parameters you have to send to the server
+            case "start":
               const {
                 temperature,
-                prefixPadding,
                 silenceDuration,
                 threshold,
+                voice,
+                voice_provider,
                 system_prompt,
                 sessionId,
               } = JSON.parse(msg);
 
               const config = JSON.stringify({
                 temperature: temperature,
-                prefixPadding: prefixPadding,
+                voice: voice,
+                voice_provider: voice_provider,
                 silenceDuration: silenceDuration,
                 threshold: threshold,
                 system_prompt: system_prompt,
@@ -121,16 +122,43 @@ const audio_stream = (wss) => {
               // Not sufficient balance
               wss.send(JSON.stringify({ type: "info", msg: msg }));
               break;
+            case "media":
+              try {
+                const message = Buffer.from(msg, "base64");
+                const metadataEndIndex = message.indexOf(0);
+                const metadataString = message
+                  .slice(0, metadataEndIndex)
+                  .toString("utf-8");
+                // console.log("metadata : ", metadataString);
+                const bufferWithoutMetadata = message.slice(
+                  metadataEndIndex + 1
+                );
+                // console.log("buffer : ", bufferWithoutMetadata);
+
+                const { session_id, sequence_id } = JSON.parse(metadataString);
+                console.log(session_id, sequence_id);
+
+                if (bufferWithoutMetadata.length <= 0) return;
+                const base64buffer = message.toString("base64");
+                wss.send(JSON.stringify({ type: "media", msg: base64buffer }));
+              } catch (err) {
+                console.log(`Error in media : ${err}`);
+              }
+              break;
+            case "pause":
+              wss.send(JSON.stringify({ type: "pause", msg: "pause" }));
+              break;
+            case "contunue":
+              wss.send(JSON.stringify({ type: "continue", msg: "continue" }));
+              break;
             case "clear":
               wss.send(JSON.stringify({ type: "clear", msg: "clear" }));
               break;
             case "end":
               wss.send(JSON.stringify({ type: "end", msg: "end" }));
               break;
-            case "grpcConnection":
-              wss.send(
-                JSON.stringify({ type: "grpcConnection", msg: "connected" })
-              );
+            case "ready":
+              wss.send(JSON.stringify({ type: "ready", msg: "connected" }));
               break;
             default:
               break;

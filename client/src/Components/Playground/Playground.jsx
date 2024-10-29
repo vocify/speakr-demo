@@ -1,27 +1,31 @@
 import React, { useEffect, useRef, useState } from "react";
 import css from "./Playground.module.scss";
-import MicAnimation from "../../Assets/MicAnimation/MicAnimation";
+import MicAnimation from "../MicAnimation/MicAnimation";
 import toast from "react-hot-toast";
 import { v4 as uuidv4 } from "uuid";
 import settings from "../../Assets/SVG/Setting.svg";
 import Down from "../../Assets/SVG/Down.svg";
+import { GiBroom } from "react-icons/gi";
+// import Sound from "../../Assets/SVG/Sound.svg";
 
-const DefaultVoices = [
+const voices = [
   {
-    name: "EVA",
+    name: "JILL",
+    value: "jill",
+  },
+  {
+    name: "JACK",
+    value: "jack",
   },
 ];
 
 const Playground = () => {
   const [temperature, setTemperature] = useState(0.7);
   const [threshold, setThreshold] = useState(0.5);
-  const [prefixPadding, setPrefixPadding] = useState(500);
   const [silenceDuration, setSilenceDuration] = useState(500);
   const [mobileView, setmobileView] = useState(false);
   const [isVoices, setisVoices] = useState(false);
-  const [voices, setvoices] = useState(DefaultVoices);
   const [selectedVoice, setselectedVoice] = useState(voices[0]);
-
   const [ismicopen, setismicopen] = useState(false);
   const [ismic, setismic] = useState(false);
   const [audioStream, setAudioStream] = useState(null);
@@ -29,17 +33,19 @@ const Playground = () => {
   const sourceRef = useRef(null);
   const audioContextRef = useRef(null);
   const playing = useRef(false);
+  const lastshifted = useRef(null);
   const bufferQueue = useRef([]);
   const socket = useRef(null);
   const isgrpc = useRef(null);
   const [isgrpcs, setisgrpc] = useState(false);
   const [socketConnected, setsocketConnected] = useState(false);
   const [audioContextState, setaudioContextState] = useState(false);
-  const sessionId = uuidv4();
   if (!sessionStorage.getItem("sessionId")) {
+    const sessionId = uuidv4();
     sessionStorage.setItem("sessionId", sessionId);
   }
-  const [session, setsession] = useState(sessionId);
+  // const [session, setsession] = useState(sessionId);
+  const [session, setsession] = useState(sessionStorage.getItem("sessionId"));
   const [system_prompt, setsetsystemPrompt] = useState("");
 
   useEffect(() => {
@@ -57,104 +63,108 @@ const Playground = () => {
       }
       playing.current = true;
 
-      const data = bufferQueue.current.shift();
-      if (data instanceof Blob) {
-        let arrayBuffer = await data.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        const metadataEndIndex = bytes.indexOf(0);
-        let metadata = new TextDecoder().decode(
-          bytes.slice(0, metadataEndIndex)
-        );
-        metadata = JSON.parse(metadata);
+      const base64Data = bufferQueue.current.shift(); // Get the Base64 encoded string
+      lastshifted.current = base64Data;
 
-        const { session_id, sequence_id } = metadata;
-        arrayBuffer = arrayBuffer.slice(
-          metadataEndIndex + 1,
-          arrayBuffer.length
-        );
+      // Decode the Base64 string into binary data
+      // Decode the Base64 to a Uint8Array
+      const bytes = new Uint8Array(
+        atob(base64Data)
+          .split("")
+          .map((char) => char.charCodeAt(0))
+      );
 
-        try {
-          if (audioContextRef.current.state === "suspended") {
-            await audioContextRef.current.resume();
-          }
-          const audioBuffer = await audioContextRef.current.decodeAudioData(
-            arrayBuffer
-          );
+      // Convert Uint8Array to ArrayBuffer
+      let arrayBuffer = bytes.buffer;
 
-          // Disconnect the old source if it exists
-          if (sourceRef.current) {
-            sourceRef.current.disconnect();
-          }
+      const metadataEndIndex = bytes.indexOf(0); // Find null byte separating name from audio data
+      let metadata = new TextDecoder().decode(bytes.slice(0, metadataEndIndex));
+      metadata = JSON.parse(metadata);
 
-          // Create a new source and set its properties
-          const source = audioContextRef.current.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(audioContextRef.current.destination);
-          source.start(0); // Start the playback
-          sourceRef.current = source;
-          sourceRef.current.session_id = session_id;
-          sourceRef.current.sequence_id = sequence_id;
+      const { session_id, sequence_id } = metadata;
+      arrayBuffer = arrayBuffer.slice(metadataEndIndex + 1, arrayBuffer.length);
 
-          // Define what happens when the audio ends
-          sourceRef.current.onended = () => {
-            if (
-              socket.current.readyState === WebSocket.OPEN &&
-              sourceRef?.current?.sequence_id
-            ) {
-              socket.current.send(
-                JSON.stringify({
-                  type: "status",
-                  msg: {
-                    session_id: sourceRef?.current?.session_id,
-                    sequence_id: sourceRef?.current?.sequence_id,
-                  },
-                })
-              );
-            }
-
-            // If there are more buffers in the queue, play them
-            if (bufferQueue.current.length > 0) {
-              playing.current = true;
-              handlePlay();
-            } else {
-              playing.current = false;
-            }
-          };
-        } catch (error) {
-          console.error("Error decoding audio data:", error);
-          // if (bufferQueue.current.length > 0) {
-          //   playing.current = true;
-          //   handlePlay();
-          // } else {
-          //   playing.current = false;
-          // }
+      try {
+        if (audioContextRef.current.state === "suspended") {
+          await audioContextRef.current.resume();
         }
-      } else {
-        console.error("Received unexpected data type:", data);
+        const audioBuffer = await audioContextRef.current.decodeAudioData(
+          arrayBuffer
+        );
+
+        // Disconnect the old source if it exists
+        if (sourceRef.current) {
+          sourceRef.current.disconnect();
+        }
+
+        // Create a new source and set its properties
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContextRef.current.destination);
+        source.start(0); // Start the playback
+        sourceRef.current = source;
+        sourceRef.current.session_id = session_id;
+        sourceRef.current.sequence_id = sequence_id;
+
+        // Define what happens when the audio ends
+        sourceRef.current.onended = () => {
+          lastshifted.current = null;
+          if (
+            socket.current.readyState === WebSocket.OPEN &&
+            sourceRef?.current?.sequence_id
+          ) {
+            socket.current.send(
+              JSON.stringify({
+                type: "status",
+                msg: {
+                  session_id: sourceRef?.current?.session_id,
+                  sequence_id: sourceRef?.current?.sequence_id,
+                },
+              })
+            );
+          }
+
+          // If there are more buffers in the queue, play them
+          if (bufferQueue.current.length > 0) {
+            playing.current = true;
+            handlePlay();
+          } else {
+            playing.current = false;
+          }
+        };
+      } catch (error) {
+        // console.error("Error decoding audio data:", error);
       }
     } catch (error) {
-      console.error("Error in handlePlay: ", error);
+      // console.error("Error in handlePlay: ", error);
     }
   };
 
   const handlemicchange = async () => {
+    // if (!socket.current || !isgrpc) {
+    //   toast.error("Please try again..");
+    //   return;
+    // }
+
     if (ismicopen && sourceRef.current) {
-      sourceRef.current.onended = null;
-      sourceRef.current.stop();
-      sourceRef.current.disconnect();
-      sourceRef.current = null;
+      sourceRef.current.onended = null; // Prevent onended from being called again
+      sourceRef.current.stop(); // Stop the currently playing buffer
+      sourceRef.current.disconnect(); // Disconnect from the audio context
+      sourceRef.current = null; // Clear the reference
       bufferQueue.current = [];
     }
     if (!ismicopen) {
+      // await startAudioStream();
       setismicopen(true);
+      console.log(selectedVoice.value);
       socket.current.send(
         JSON.stringify({
           type: "start",
           msg: JSON.stringify({
             temperature: temperature,
-            prefixPadding: prefixPadding,
             silenceDuration: silenceDuration,
-            voice: selectedVoice,
+            voice: selectedVoice?.value,
+            voice_provider : "style",
             threshold: threshold,
             system_prompt: system_prompt,
             sessionId: session,
@@ -175,43 +185,8 @@ const Playground = () => {
     const websocketURL = `ws://localhost:8081/v2v`;
     const ws = new WebSocket(websocketURL);
 
-    // let cansend = false;
-
     ws.onmessage = async (event) => {
-      if (event.data instanceof Blob) {
-        // let arrayBuffer = await event.data.arrayBuffer();
-
-        // const bytes = new Uint8Array(arrayBuffer);
-        // const metadataEndIndex = bytes.indexOf(0);
-        // let metadata = new TextDecoder().decode(
-        //   bytes.slice(0, metadataEndIndex)
-        // );
-        // metadata = JSON.parse(metadata);
-
-        // const { sequence_id } = metadata;
-        // if (sequence_id === "0") {
-        //   bufferQueue.current = [];
-        //   playing.current = false;
-        //   cansend = false;
-
-        //   if (sourceRef.current) {
-        //     sourceRef.current.onended = null;
-        //     sourceRef.current.stop();
-        //     sourceRef.current.disconnect();
-        //     sourceRef.current = null;
-        //   }
-        // }
-
-        // if (sequence_id === "1") {
-        //   cansend = true;
-        // }
-        // if (sequence_id !== "0" && cansend) {
-        bufferQueue.current.push(event.data);
-        // }
-        if (!playing.current && bufferQueue.current.length > 0) {
-          await handlePlay();
-        }
-      } else {
+      try {
         const data = JSON.parse(event.data);
 
         const { type, msg } = data;
@@ -221,27 +196,51 @@ const Playground = () => {
             socket.current = ws;
             setsocketConnected(true);
             break;
+          case "media":
+            bufferQueue.current.push(msg);
+
+            // Start playing if not currently playing
+            if (!playing.current && bufferQueue.current.length > 0) {
+              await handlePlay();
+            }
+            break;
           case "info":
             toast.error(msg);
             break;
-          case "grpcConnection":
+          case "ready":
             isgrpc.current = true;
             setisgrpc(true);
             await startAudioStream();
+            break;
+          case "pause":
+            if (sourceRef.current) {
+              sourceRef.current.onended = null; // Prevent onended from being called again
+              sourceRef.current.stop(); // Stop the currently playing buffer
+              sourceRef.current.disconnect(); // Disconnect from the audio context
+              sourceRef.current = null; // Clear the reference
+            }
+            break;
+          case "continue":
+            if (lastshifted.current) {
+              bufferQueue.current.unshift(lastshifted.current);
+              lastshifted.current = null;
+            }
+            handlePlay();
             break;
           case "clear":
             bufferQueue.current = [];
             playing.current = false;
 
             if (sourceRef.current) {
-              sourceRef.current.onended = null;
-              sourceRef.current.stop();
-              sourceRef.current.disconnect();
-              sourceRef.current = null;
+              sourceRef.current.onended = null; // Prevent onended from being called again
+              sourceRef.current.stop(); // Stop the currently playing buffer
+              sourceRef.current.disconnect(); // Disconnect from the audio context
+              sourceRef.current = null; // Clear the reference
             }
             break;
           case "end":
             try {
+              // if (audioContextState) {
               audioContext
                 .close()
                 .then(() => {
@@ -254,16 +253,20 @@ const Playground = () => {
                   if (ismicopen) {
                     toast.error("Please restart the conversation.");
                   }
+                  // console.error(err);
                 });
               await stopAudioStream();
               setismicopen(false);
+              // }
             } catch (error) {
-              console.log("Error in closing audioContext.");
+              // console.error("Error in closing audioContext.");
             }
             break;
           default:
             break;
         }
+      } catch (error) {
+        console.log("Error in websocket media.");
       }
     };
 
@@ -272,12 +275,12 @@ const Playground = () => {
         await audioStream.getTracks().forEach((track) => track.stop());
         setAudioStream(null);
       } catch (err) {
-        console.log(err);
+        // console.error(err);
       }
     };
 
     ws.onerror = (err) => {
-      console.log("Websocket Error", err);
+      // console.error("Websocket Error", err);
     };
 
     return () => {
@@ -336,14 +339,14 @@ const Playground = () => {
                   })
                   .catch((err) => {
                     toast.error("Please restart the conversation.");
-                    console.log(err);
+                    // console.error(err);
                   });
                 await stopAudioStream();
                 toast.error("Please start again.");
                 setismicopen(false);
               }
             } catch (error) {
-              console.log("Error in closing audioContext.");
+              // console.error("Error in closing audioContext.");
             }
           }
           if (isgrpc.current) {
@@ -351,14 +354,14 @@ const Playground = () => {
             socket.current.send(l16Data);
           }
         } catch (err) {
-          console.error("Error in sending buffer.");
+          // console.error("Error in sending buffer.");
         }
       };
 
       audioInput.connect(scriptProcessorNode);
       scriptProcessorNode.connect(audioContext.destination);
     } catch (error) {
-      console.error("Error accessing microphone:", error);
+      // console.error("Error accessing microphone:", error);
     }
   };
 
@@ -375,27 +378,47 @@ const Playground = () => {
           setAudioStream(null);
         }
       } catch (err) {
-        console.log(err);
+        // console.error(err);
       }
       try {
         if (socket.current.readyState === WebSocket.OPEN) {
           isgrpc.current = false;
           socket.current.send(JSON.stringify({ type: "stop", msg: "stop" }));
         }
-        audioContext.close().catch((err) => {
-          console.log("Error in closing the audioContext.", err);
-        });
+        audioContext
+          .close()
+          .then(() => {
+            // console.log("AudioContext closed.");
+          })
+          .catch((err) => {
+            // console.error("Error in closing the audioContext.", err);
+          });
       } catch (err) {
-        console.log("Error in closing the audioContext.");
+        // console.log("Error in closing the audioContext.");
       }
     }
+  };
+  const getButtonText = () => {
+    if (!ismicopen) {
+      return "Start";
+    }
+    if (ismicopen && !isgrpcs) {
+      return "Starting";
+    }
+    if (isgrpcs) {
+      return "Stop";
+    }
+    return ""; // Fallback, although this case shouldn't occur with given logic
   };
 
   return (
     <div className={css.main}>
       <div className={css.container}>
+        {/* Realtime Conversation Section */}
         <div className={css.header}>
           <div className={css.nav}>
+            {/* <img src={clear} alt="" srcset="" />
+          <div className={css.toolkit}>clear</div> */}
             <h3>Realtime</h3>
             <img
               src={settings}
@@ -408,37 +431,65 @@ const Playground = () => {
           </div>
 
           <div className={css.realtime}>
+            <div>
+              <div
+                className={`${css.clarbtn} ${!mobileView && css.marginclear}`}
+              >
+                <button
+                  onClick={() => {
+                    sessionStorage.removeItem("sessionId");
+                    const sessionId = uuidv4();
+                    sessionStorage.setItem("sessionId", sessionId);
+                    setsession(sessionStorage.getItem("sessionId"));
+                    toast.success("New Session Started.");
+                  }}
+                >
+                  <GiBroom className={css.broom} />
+                  clear
+                </button>
+              </div>
+            </div>
             <div className={css.conversation}>
+              {/* {chat.length > 0 &&
+              chat.map((item, index) => {
+                console.log(item);
+                return (
+                  <div className={css.message} key={index}>
+                    <span>{item.timestamp}</span>
+                    <div className={css.msg}>
+                      <div className={css.speaker}>{item.speaker}</div>
+                      <div>{item.content}</div>
+                    </div>
+                  </div>
+                );
+              })} */}
+
               <div className={`${css.speakNow}`}>
                 {socketConnected ? (
-                  <div className={`${css.mic_border}`}>
-                    <MicAnimation
-                      micopen={ismicopen}
-                      setmicopen={handlemicchange}
-                      socket={socketConnected}
-                      grpc={isgrpcs}
-                    />
+                  <div>
+                    {ismicopen && isgrpc && socketConnected && (
+                      <MicAnimation
+                        micopen={ismicopen}
+                        socket={socketConnected}
+                        grpc={isgrpcs}
+                      />
+                    )}
+
+                    <div className={css.startSession}>
+                      <button onClick={handlemicchange}>
+                        {getButtonText()}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div>Connecting...</div>
                 )}
-                <div className={css.startSession}>
-                  <button
-                    onClick={() => {
-                      sessionStorage.removeItem("sessionId");
-                      sessionStorage.setItem("sessionId", sessionId);
-                      setsession(sessionStorage.getItem("sessionId"));
-                      toast.success("New Session Started.");
-                    }}
-                  >
-                    Start New Session
-                  </button>
-                </div>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Controls Section */}
         <div className={!mobileView ? css.controls : css.controlsMobile}>
           <div className={css.contolsMobile}>
             <h4 className={css.heading}>System Instructions</h4>
@@ -494,6 +545,9 @@ const Playground = () => {
                           >
                             {item.name}
                           </div>{" "}
+                          {/* <span>
+                            <img src={Sound} alt="" srcset="" />
+                          </span> */}
                         </li>
                       );
                     })}
@@ -518,6 +572,7 @@ const Playground = () => {
               onChange={(e) => setThreshold(parseFloat(e.target.value))}
             />
           </div>
+
 
           <div className={css.sliderGroup}>
             <div className={css.sliderinfo}>

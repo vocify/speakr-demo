@@ -98,7 +98,8 @@ Upon a successful connection, the server will send :
   "type": "start",
   "msg": JSON.stringify({
     "temperature": <number>,
-    "prefixPadding": <string>,
+    "voice" : <string>,
+    "voice_provider" : "style",
     "silenceDuration": <number>,
     "threshold": <number>,
     "system_prompt": <string>,
@@ -119,12 +120,12 @@ Upon a successful connection, the server will send :
 #### Send Audio Buffer to speakr
 
 - After sending the "start" message, the client needs to stream the audio buffer to the server as binary data, which the server will process.
-- The audio buffer should be encoded in Linear16 format with a sample rate of 8000 Hz and a buffer size of 256 bytes.
+- The audio buffer should be encoded in Linear16 format with a sample rate of 8000 Hz and a buffer size of 512 bytes.
 
 ```javascript
   // Audio encoding: Linear16 (16-bit linear PCM)
   // Sample rate: 8000 Hz
-  // Buffer size: 256 bytes
+  // Buffer size: 512 bytes
   socket.send(audioBuffer);
 ```
 
@@ -199,6 +200,31 @@ In case of invalid API key or balance issues, Speakr will send an information me
 {
   "type": "info",
   "msg": "error_message"
+}
+```
+
+
+### `pause` Event
+
+This event occurs when the user interrupts the conversation. However, it might not always indicate an intentional interruption. You can clear the buffer sent to Twilio but handle it with caution.
+
+
+```json
+{
+  "type": "pause",
+  "msg": "pause"
+}
+```
+
+### `continue` Event
+
+If the interruption is not significant, replay the previous response's buffer from where the interruption occurred.
+
+
+```json
+{
+  "type": "continue",
+  "msg": "continue"
 }
 ```
 
