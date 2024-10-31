@@ -10,6 +10,8 @@ Before getting started, ensure that you have the following:
 - npm (version 6.x or higher)
 - A Speakr API Key (visit Speakr to obtain it)
 
+### For a comprehensive guide on integrating Twilio with Speakr, refer to the [Twilio Integration repository](https://github.com/vocify/twilio-integration).
+
 ### Getting Started
 
 #### Step 1: Add Your API Key
