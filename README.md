@@ -97,6 +97,7 @@ Upon a successful connection, the server will send :
 - To initiate the connection, the client must send a message with the required parameters: `temperature`, `voice`, `silenceDuration`, `threshold`, and a `system_prompt`. Below is the structured format for the message:
 
 #### Parameters:
+
 - **temperature**: Range 0 to 1 (ideal: 0.7)
 - **voice**: Options are either `"jill"` or `"jack"`
 - **silenceDuration**: Range 10ms to 1000ms (ideal: 100ms)
@@ -136,10 +137,10 @@ Upon a successful connection, the server will send :
 - The audio buffer should be encoded in Linear16 format with a sample rate of 8000 Hz and a buffer size of 512 bytes.
 
 ```javascript
-  // Audio encoding: Linear16 (16-bit linear PCM)
-  // Sample rate: 8000 Hz
-  // Buffer size: 512 bytes
-  socket.send(audioBuffer);
+// Audio encoding: Linear16 (16-bit linear PCM)
+// Sample rate: 8000 Hz
+// Buffer size: 512 bytes
+socket.send(audioBuffer);
 ```
 
 #### Sending Status Updates to speakr
@@ -188,6 +189,7 @@ if (Buffer.isBuffer(message)) {
 
 - If you implement the code of detecting which buffer is played on the server side(if you are working with Twilio like providers) then you can send the buffer without the metadata and can use Twilio mark functionality for detecting which buffer is played on the client mobile.
 - When you the get played session_id and sequence_id you can send then to speakr using the status event.
+- If you require a transcript for any feature, it will be available in the metadata under 'transcript'. If the `sequence_id` is -2, it indicates the user's transcript, whereas if the `sequence_id` is between 1 and infinity, it corresponds to the AI's transcript.
 
 ```javascript
 if (Buffer.isBuffer(message)) {
@@ -196,7 +198,18 @@ if (Buffer.isBuffer(message)) {
   const metadataString = new TextDecoder().decode(
     bytes.slice(0, metadataEndIndex)
   );
-  const { session_id, sequence_id } = JSON.parse(metadataString);
+  const { session_id, sequence_id, transcript } = JSON.parse(metadataString);
+  console.log(session_id, sequence_id, transcript);
+
+  if (sequence_id === "-2") {
+    console.log("User : ", transcript);
+  } else if (
+    sequence_id !== "0" &&
+    sequence_id !== "-1" &&
+    sequence_id !== "-2"
+  ) {
+    console.log("AI : ", transcript);
+  }
 
   const bufferWithoutMetadata = message.slice(metadataEndIndex + 1);
   if (bufferWithoutMetadata.length <= 0) return;
@@ -216,11 +229,9 @@ In case of invalid API key or balance issues, Speakr will send an information me
 }
 ```
 
-
 ### `pause` Event
 
 This event occurs when the user interrupts the conversation. However, it might not always indicate an intentional interruption. You can clear the buffer sent to Twilio but handle it with caution.
-
 
 ```json
 {
@@ -232,7 +243,6 @@ This event occurs when the user interrupts the conversation. However, it might n
 ### `continue` Event
 
 If the interruption is not significant, replay the previous response's buffer from where the interruption occurred.
-
 
 ```json
 {

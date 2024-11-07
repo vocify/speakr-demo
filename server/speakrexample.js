@@ -135,8 +135,17 @@ const audio_stream = (wss) => {
                 );
                 // console.log("buffer : ", bufferWithoutMetadata);
 
-                const { session_id, sequence_id } = JSON.parse(metadataString);
-                console.log(session_id, sequence_id);
+                const { session_id, sequence_id , transcript} = JSON.parse(metadataString);
+                console.log(session_id, sequence_id , transcript);
+
+                if(sequence_id === "-2"){
+                  // Transcript for User
+                  console.log("User : " , transcript);
+                }
+                else if(sequence_id !== "0" && sequence_id !== "-1" && sequence_id !== "-2"){
+                  // Transcript for AI
+                  console.log("AI : " , transcript);
+                }
 
                 if (bufferWithoutMetadata.length <= 0) return;
                 const base64buffer = message.toString("base64");
