@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import css from "./Playground.module.scss";
-import MicAnimation from "../MicAnimation/MicAnimation";
 import toast from "react-hot-toast";
 import { v4 as uuidv4 } from "uuid";
 import settings from "../../Assets/SVG/Setting.svg";
 import Down from "../../Assets/SVG/Down.svg";
 import { GiBroom } from "react-icons/gi";
-// import Sound from "../../Assets/SVG/Sound.svg";
+import { BsInfoCircle } from "react-icons/bs";
+import { RiAiGenerate } from "react-icons/ri";
 
 const voices = [
   {
@@ -22,39 +22,43 @@ const voices = [
 const Playground = () => {
   const [temperature, setTemperature] = useState(0.7);
   const [threshold, setThreshold] = useState(0.5);
-  const [silenceDuration, setSilenceDuration] = useState(500);
+  const [silenceDuration, setSilenceDuration] = useState(100);
   const [mobileView, setmobileView] = useState(false);
+  const [generating, setgenerating] = useState(false);
   const [isVoices, setisVoices] = useState(false);
   const [selectedVoice, setselectedVoice] = useState(voices[0]);
-  const [ismicopen, setismicopen] = useState(false);
+  const [ismicopen, setismicopen] = useState(false); //false
   const [ismic, setismic] = useState(false);
   const [audioStream, setAudioStream] = useState(null);
   const [audioContext, setAudioContext] = useState(null);
   const sourceRef = useRef(null);
   const audioContextRef = useRef(null);
   const playing = useRef(false);
+  const [isplaying, setisplaying] = useState(false);
   const lastshifted = useRef(null);
   const bufferQueue = useRef([]);
   const socket = useRef(null);
   const isgrpc = useRef(null);
-  const [isgrpcs, setisgrpc] = useState(false);
+  const [isgrpcs, setisgrpc] = useState(false); //false
   const [socketConnected, setsocketConnected] = useState(false);
   const [audioContextState, setaudioContextState] = useState(false);
   if (!sessionStorage.getItem("sessionId")) {
     const sessionId = uuidv4();
     sessionStorage.setItem("sessionId", sessionId);
   }
-  // const [session, setsession] = useState(sessionId);
   const [session, setsession] = useState(sessionStorage.getItem("sessionId"));
   const [system_prompt, setsetsystemPrompt] = useState("");
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [interval, setinterval] = useState(null);
+
+  const [chathistory, setchathistory] = useState([]);
+  const msgref = useRef(null);
 
   useEffect(() => {
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, []);
+    if (chathistory) {
+      msgref?.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chathistory]);
 
   const handlePlay = async () => {
     try {
@@ -62,6 +66,7 @@ const Playground = () => {
         return;
       }
       playing.current = true;
+      setisplaying(true);
 
       const base64Data = bufferQueue.current.shift(); // Get the Base64 encoded string
       lastshifted.current = base64Data;
@@ -81,7 +86,8 @@ const Playground = () => {
       let metadata = new TextDecoder().decode(bytes.slice(0, metadataEndIndex));
       metadata = JSON.parse(metadata);
 
-      const { session_id, sequence_id } = metadata;
+      const { session_id, sequence_id, transcript } = metadata;
+
       arrayBuffer = arrayBuffer.slice(metadataEndIndex + 1, arrayBuffer.length);
 
       try {
@@ -105,6 +111,7 @@ const Playground = () => {
         sourceRef.current = source;
         sourceRef.current.session_id = session_id;
         sourceRef.current.sequence_id = sequence_id;
+        sourceRef.current.transcript = transcript;
 
         // Define what happens when the audio ends
         sourceRef.current.onended = () => {
@@ -119,6 +126,7 @@ const Playground = () => {
                 msg: {
                   session_id: sourceRef?.current?.session_id,
                   sequence_id: sourceRef?.current?.sequence_id,
+                  transcript: sourceRef?.current?.transcript,
                 },
               })
             );
@@ -127,9 +135,11 @@ const Playground = () => {
           // If there are more buffers in the queue, play them
           if (bufferQueue.current.length > 0) {
             playing.current = true;
+            setisplaying(true);
             handlePlay();
           } else {
             playing.current = false;
+            setisplaying(false);
           }
         };
       } catch (error) {
@@ -141,11 +151,6 @@ const Playground = () => {
   };
 
   const handlemicchange = async () => {
-    // if (!socket.current || !isgrpc) {
-    //   toast.error("Please try again..");
-    //   return;
-    // }
-
     if (ismicopen && sourceRef.current) {
       sourceRef.current.onended = null; // Prevent onended from being called again
       sourceRef.current.stop(); // Stop the currently playing buffer
@@ -156,7 +161,6 @@ const Playground = () => {
     if (!ismicopen) {
       // await startAudioStream();
       setismicopen(true);
-      console.log(selectedVoice.value);
       socket.current.send(
         JSON.stringify({
           type: "start",
@@ -164,7 +168,6 @@ const Playground = () => {
             temperature: temperature,
             silenceDuration: silenceDuration,
             voice: selectedVoice?.value,
-            voice_provider : "speakr_eng_v1",
             threshold: threshold,
             system_prompt: system_prompt,
             sessionId: session,
@@ -184,6 +187,12 @@ const Playground = () => {
     setaudioContextState(true);
     const websocketURL = `ws://localhost:8081/v2v`;
     const ws = new WebSocket(websocketURL);
+    ws.onopen = () => {
+      // console.log("WebSocket connected");
+      // socket.current = ws;
+      // setsocketConnected(true);
+      // toast.success("Now You can speak...");
+    };
 
     ws.onmessage = async (event) => {
       try {
@@ -197,7 +206,23 @@ const Playground = () => {
             setsocketConnected(true);
             break;
           case "media":
-            bufferQueue.current.push(msg);
+            const bytes = new Uint8Array(
+              atob(msg)
+                .split("")
+                .map((char) => char.charCodeAt(0))
+            );
+
+            const metadataEndIndex = bytes.indexOf(0); // Find null byte separating name from audio data
+            let metadata = new TextDecoder().decode(
+              bytes.slice(0, metadataEndIndex)
+            );
+            metadata = JSON.parse(metadata);
+
+            const { sequence_id } = metadata;
+
+            if (sequence_id !== "-2") {
+              bufferQueue.current.push(msg);
+            }
 
             // Start playing if not currently playing
             if (!playing.current && bufferQueue.current.length > 0) {
@@ -219,17 +244,23 @@ const Playground = () => {
               sourceRef.current.disconnect(); // Disconnect from the audio context
               sourceRef.current = null; // Clear the reference
             }
+            playing.current = false;
+            setgenerating(true);
+            setisplaying(false);
             break;
           case "continue":
             if (lastshifted.current) {
               bufferQueue.current.unshift(lastshifted.current);
               lastshifted.current = null;
             }
+            setgenerating(false);
             handlePlay();
             break;
           case "clear":
             bufferQueue.current = [];
             playing.current = false;
+            setgenerating(false);
+            setisplaying(false);
 
             if (sourceRef.current) {
               sourceRef.current.onended = null; // Prevent onended from being called again
@@ -262,11 +293,14 @@ const Playground = () => {
               // console.error("Error in closing audioContext.");
             }
             break;
+          case "chathistory":
+            setchathistory(msg);
+            break;
           default:
             break;
         }
       } catch (error) {
-        console.log("Error in websocket media.");
+        // console.error("Error in websocket media.");
       }
     };
 
@@ -274,6 +308,7 @@ const Playground = () => {
       try {
         await audioStream.getTracks().forEach((track) => track.stop());
         setAudioStream(null);
+        setElapsedTime(0);
       } catch (err) {
         // console.error(err);
       }
@@ -301,6 +336,15 @@ const Playground = () => {
 
   const startAudioStream = async () => {
     try {
+      if (!socket.current || socket.current.readyState !== WebSocket.OPEN) {
+        toast.error("Please reload the page.");
+      }
+      const startTime = Date.now();
+      setchathistory([]);
+      const interval = setInterval(() => {
+        setElapsedTime(Date.now() - startTime); // Update elapsed time
+      }, 1000);
+      setinterval(interval);
       if (!socket.current) {
         toast.error("Please try again.. Socket");
         return;
@@ -366,7 +410,12 @@ const Playground = () => {
   };
 
   const stopAudioStream = async () => {
+    setgenerating(false);
     setismicopen(false);
+    setElapsedTime(0);
+    if (interval) {
+      clearInterval(interval);
+    }
     if (
       socket.current &&
       audioStream &&
@@ -394,7 +443,7 @@ const Playground = () => {
             // console.error("Error in closing the audioContext.", err);
           });
       } catch (err) {
-        // console.log("Error in closing the audioContext.");
+        // console.error("Error in closing the audioContext.");
       }
     }
   };
@@ -409,6 +458,18 @@ const Playground = () => {
       return "Stop";
     }
     return ""; // Fallback, although this case shouldn't occur with given logic
+  };
+
+  const formatTime = (milliseconds) => {
+    let totalSeconds = Math.floor(milliseconds / 1000);
+    let hours = Math.floor(totalSeconds / 3600);
+    let minutes = Math.floor((totalSeconds % 3600) / 60);
+    let seconds = totalSeconds % 60;
+
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(seconds).padStart(2, "0")}`;
   };
 
   return (
@@ -431,60 +492,57 @@ const Playground = () => {
           </div>
 
           <div className={css.realtime}>
-            <div>
-              <div
-                className={`${css.clarbtn} ${!mobileView && css.marginclear}`}
+            <div className={`${css.clarbtn} ${!mobileView && css.marginclear}`}>
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem("sessionId");
+                  const sessionId = uuidv4();
+                  setchathistory([]);
+                  sessionStorage.setItem("sessionId", sessionId);
+                  setsession(sessionStorage.getItem("sessionId"));
+                  toast.success("New Session Started.");
+                }}
               >
-                <button
-                  onClick={() => {
-                    sessionStorage.removeItem("sessionId");
-                    const sessionId = uuidv4();
-                    sessionStorage.setItem("sessionId", sessionId);
-                    setsession(sessionStorage.getItem("sessionId"));
-                    toast.success("New Session Started.");
-                  }}
-                >
-                  <GiBroom className={css.broom} />
-                  clear
-                </button>
-              </div>
+                <GiBroom className={css.broom} />
+                clear
+              </button>
             </div>
             <div className={css.conversation}>
-              {/* {chat.length > 0 &&
-              chat.map((item, index) => {
-                console.log(item);
-                return (
-                  <div className={css.message} key={index}>
-                    <span>{item.timestamp}</span>
-                    <div className={css.msg}>
-                      <div className={css.speaker}>{item.speaker}</div>
-                      <div>{item.content}</div>
+              {chathistory.length > 0 &&
+                chathistory.map((item, index) => {
+                  return (
+                    <>
+                      <div className={css.message} key={index}>
+                        <div className={css.msg}>
+                          <div className={css.speaker}>{item.speaker}</div>
+                          <div>{item.content}</div>
+                        </div>
+                      </div>
+                      <div ref={msgref}></div>
+                    </>
+                  );
+                })}
+            </div>
+            <div className={`${css.speakNow}`}>
+              {socketConnected ? (
+                <div>
+                  <div className={`${css.startstop}`}>
+                    <div className={`${css.totaltime}`}>
+                      {!ismicopen ? "00:00:00" : formatTime(elapsedTime)}
                     </div>
-                  </div>
-                );
-              })} */}
-
-              <div className={`${css.speakNow}`}>
-                {socketConnected ? (
-                  <div>
-                    {ismicopen && isgrpc && socketConnected && (
-                      <MicAnimation
-                        micopen={ismicopen}
-                        socket={socketConnected}
-                        grpc={isgrpcs}
-                      />
-                    )}
-
-                    <div className={css.startSession}>
-                      <button onClick={handlemicchange}>
-                        {getButtonText()}
-                      </button>
+                    <div
+                      className={`${css.generateIcon} ${
+                        generating && css.generating
+                      } ${!generating && css.notgeneerating}`}
+                    >
+                      <RiAiGenerate />
                     </div>
+                    <button onClick={handlemicchange}>{getButtonText()}</button>
                   </div>
-                ) : (
-                  <div>Connecting...</div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div>Connecting...</div>
+              )}
             </div>
           </div>
         </div>
@@ -492,7 +550,16 @@ const Playground = () => {
         {/* Controls Section */}
         <div className={!mobileView ? css.controls : css.controlsMobile}>
           <div className={css.contolsMobile}>
-            <h4 className={css.heading}>System Instructions</h4>
+            <h4 className={css.heading}>
+              System Instructions{" "}
+              <span className={css.parametersInfo}>
+                <BsInfoCircle className={css.infoicon} />
+                <div className={css.parainfoContent}>
+                  Override the default instructions that shape the model's
+                  behavior.
+                </div>
+              </span>
+            </h4>
             {mobileView && (
               <img
                 src={settings}
@@ -545,9 +612,6 @@ const Playground = () => {
                           >
                             {item.name}
                           </div>{" "}
-                          {/* <span>
-                            <img src={Sound} alt="" srcset="" />
-                          </span> */}
                         </li>
                       );
                     })}
@@ -560,7 +624,17 @@ const Playground = () => {
 
           <div className={css.sliderGroup}>
             <div className={css.sliderinfo}>
-              <label htmlFor="threshold">Threshold</label>
+              <label htmlFor="threshold">
+                Threshold{" "}
+                <span className={css.parametersInfo}>
+                  <BsInfoCircle className={css.infoicon} />
+                  <div className={css.parainfoContent}>
+                    Voice activity detection threshold. Lower values are more
+                    sensitive.
+                  </div>
+                </span>
+              </label>
+
               <span className={css.parameters}>{threshold}</span>
             </div>
             <input
@@ -573,10 +647,18 @@ const Playground = () => {
             />
           </div>
 
-
           <div className={css.sliderGroup}>
             <div className={css.sliderinfo}>
-              <label htmlFor="silenceDuration">Silence duration</label>
+              <label htmlFor="silenceDuration">
+                Silence duration{" "}
+                <span className={css.parametersInfo}>
+                  <BsInfoCircle className={css.infoicon} />
+                  <div className={css.parainfoContent}>
+                    Duration of silence before the AI considers speaking to have
+                    ended.
+                  </div>
+                </span>
+              </label>
               <span>{silenceDuration} ms</span>
             </div>
             <input
@@ -592,7 +674,17 @@ const Playground = () => {
           <h4>Model configuration</h4>
           <div className={css.sliderGroup}>
             <div className={css.sliderinfo}>
-              <label htmlFor="temperature">Temperature</label>
+              <label htmlFor="temperature">
+                Temperature{" "}
+                <span className={css.parametersInfo}>
+                  <BsInfoCircle className={css.infoicon} />
+                  <div className={css.parainfoContent}>
+                    Controls randomness: Lowering results in less random
+                    completions. As the temperature approaches zero, the model
+                    will become deterministic and repetitive.
+                  </div>
+                </span>
+              </label>
               <span>{temperature}</span>
             </div>
             <input
