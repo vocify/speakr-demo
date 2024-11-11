@@ -169,56 +169,9 @@ Close the connection
 }
 ```
 
-#### Audio buffer received from speakr
-
-- When an audio buffer is received from Speakr, you can verify the message using the Buffer module:
-- You will receive the session_id and sequence_id of the buffer encoded in the buffer
-
-#### Code if you want to send the buffer with the session_id and sequence_id :
-
-- If you implement the code of detecting which buffer is played on the client side then you can send the buffer with the metadata and can decode it in the client side.
-- You can take help from the client provided in the repo.
-
-```javascript
-if (Buffer.isBuffer(message)) {
-  toClient.send(message);
-}
-```
-
-#### If you want to send the buffer without the session_id and sequence_id :
-
-- If you implement the code of detecting which buffer is played on the server side(if you are working with Twilio like providers) then you can send the buffer without the metadata and can use Twilio mark functionality for detecting which buffer is played on the client mobile.
-- When you the get played session_id and sequence_id you can send then to speakr using the status event.
-- If you require a transcript for any feature, it will be available in the metadata under 'transcript'. If the `sequence_id` is -2, it indicates the user's transcript, whereas if the `sequence_id` is between 1 and infinity, it corresponds to the AI's transcript.
-
-```javascript
-if (Buffer.isBuffer(message)) {
-  const bytes = new Uint8Array(message);
-  const metadataEndIndex = bytes.indexOf(0);
-  const metadataString = new TextDecoder().decode(
-    bytes.slice(0, metadataEndIndex)
-  );
-  const { session_id, sequence_id, transcript } = JSON.parse(metadataString);
-  console.log(session_id, sequence_id, transcript);
-
-  if (sequence_id === "-2") {
-    console.log("User : ", transcript);
-  } else if (
-    sequence_id !== "0" &&
-    sequence_id !== "-1" &&
-    sequence_id !== "-2"
-  ) {
-    console.log("AI : ", transcript);
-  }
-
-  const bufferWithoutMetadata = message.slice(metadataEndIndex + 1);
-  if (bufferWithoutMetadata.length <= 0) return;
-
-  toClient.send(bufferWithoutMetadata);
-}
-```
-
 #### API Key Information received from speakr
+
+### `info` Event
 
 In case of invalid API key or balance issues, Speakr will send an information message:
 
@@ -249,6 +202,52 @@ If the interruption is not significant, replay the previous response's buffer fr
   "type": "continue",
   "msg": "continue"
 }
+```
+
+### `media` Event
+
+- Buffer is encode with base64
+- You will receive the session_id and sequence_id and transcript of the buffer encoded in the buffer
+
+#### Code if you want to send the buffer with the session_id and sequence_id :
+
+- If you implement the code of detecting which buffer is played on the client side then you can send the buffer with the metadata and can decode it in the client side.
+- You can take help from the client provided in the repo.
+
+```javascript
+const message = Buffer.from(msg, "base64");
+const base64buffer = message.toString("base64");
+wss.send(JSON.stringify({ type: "media", msg: base64buffer }));
+```
+
+#### If you want to send the buffer without the session_id and sequence_id :
+
+- If you implement the code of detecting which buffer is played on the server side(if you are working with Twilio like providers) then you can send the buffer without the metadata and can use Twilio mark functionality for detecting which buffer is played on the client device.
+- When you the get played session_id and sequence_id you can send them to speakr using the status event.
+- If you require a transcript for any feature, it will be available in the metadata under 'transcript'. If the `sequence_id` is -2, it indicates the user's transcript, whereas if the `sequence_id` is between 1 and infinity, it corresponds to the AI's transcript.
+
+```javascript
+const message = Buffer.from(msg, "base64");
+const metadataEndIndex = message.indexOf(0);
+const metadataString = message.slice(0, metadataEndIndex).toString("utf-8");
+const bufferWithoutMetadata = message.slice(metadataEndIndex + 1);
+
+const { session_id, sequence_id, transcript } = JSON.parse(metadataString);
+console.log(session_id, sequence_id, transcript);
+
+if (sequence_id === "-2") {
+  // Transcript for User
+  console.log("User : ", transcript);
+} else if (
+  sequence_id !== "0" &&
+  sequence_id !== "-1"
+) {
+  // Transcript for AI
+  console.log("AI : ", transcript);
+}
+
+const base64buffer = bufferWithoutMetadata.toString("base64");
+wss.send(JSON.stringify({ type: "media", msg: base64buffer }));
 ```
 
 #### Interruption Event received from speakr

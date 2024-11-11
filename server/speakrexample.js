@@ -1,10 +1,9 @@
 const WebSocket = require("ws");
 const { Buffer } = require("buffer");
-const { TextDecoder } = require("util");
 const { api_key } = require("./config");
 const audio_stream = (wss) => {
   try {
-    if (!api_key || api_key.length < 67) {
+    if (!api_key) {
       wss.send(
         JSON.stringify({
           type: "info",
@@ -90,88 +89,67 @@ const audio_stream = (wss) => {
 
     socket.on("message", async (message) => {
       try {
-        if (Buffer.isBuffer(message)) {
-          const bytes = new Uint8Array(message);
-          const metadataEndIndex = bytes.indexOf(0);
-          const metadataString = new TextDecoder().decode(
-            bytes.slice(0, metadataEndIndex)
-          );
-          const { session_id, sequence_id } = JSON.parse(metadataString);
+        const { type, msg } = JSON.parse(message);
 
-          const bufferWithoutMetadata = message.slice(metadataEndIndex + 1);
-          if (bufferWithoutMetadata.length <= 0) return;
+        switch (type) {
+          case "initial":
+            // connected
+            wss.send(JSON.stringify({ type: "initial", msg: "connected" }));
+            break;
+          case "info":
+            // Invalid API Key
+            // API key required
+            // Not sufficient balance
+            wss.send(JSON.stringify({ type: "info", msg: msg }));
+            break;
+          case "chathistory":
+            wss.send(JSON.stringify({ type: "chathistory", msg: msg }));
+            break;
+          case "media":
+            try {
+              const message = Buffer.from(msg, "base64");
+              // const metadataEndIndex = message.indexOf(0);
+              // const metadataString = message
+              //   .slice(0, metadataEndIndex)
+              //   .toString("utf-8");
+              // // console.log("metadata : ", metadataString);
+              // const bufferWithoutMetadata = message.slice(metadataEndIndex + 1);
+              // // console.log("buffer : ", bufferWithoutMetadata);
 
-          // Depending on your logic, you can choose whether to handle the status part on the server side or client side.
+              // const { session_id, sequence_id, transcript } =
+              //   JSON.parse(metadataString);
+              // console.log(session_id, sequence_id, transcript);
 
-          // Option 1: Send buffer with metadata (session_id, sequence_id) to handle tracking on the server
-          wss.send(message);
-
-          // Option 2: Send buffer without metadata if tracking or status handling is managed by the client
-          // wss.send(bufferWithoutMetadata);
-        } else if (typeof message === "string") {
-          const { type, msg } = JSON.parse(message);
-
-          switch (type) {
-            case "initial":
-              // connected
-              wss.send(JSON.stringify({ type: "initial", msg: "connected" }));
-              break;
-            case "info":
-              // Invalid API Key
-              // API key required
-              // Not sufficient balance
-              wss.send(JSON.stringify({ type: "info", msg: msg }));
-              break;
-            case "media":
-              try {
-                const message = Buffer.from(msg, "base64");
-                const metadataEndIndex = message.indexOf(0);
-                const metadataString = message
-                  .slice(0, metadataEndIndex)
-                  .toString("utf-8");
-                // console.log("metadata : ", metadataString);
-                const bufferWithoutMetadata = message.slice(
-                  metadataEndIndex + 1
-                );
-                // console.log("buffer : ", bufferWithoutMetadata);
-
-                const { session_id, sequence_id , transcript} = JSON.parse(metadataString);
-                console.log(session_id, sequence_id , transcript);
-
-                if(sequence_id === "-2"){
-                  // Transcript for User
-                  console.log("User : " , transcript);
-                }
-                else if(sequence_id !== "0" && sequence_id !== "-1" && sequence_id !== "-2"){
-                  // Transcript for AI
-                  console.log("AI : " , transcript);
-                }
-
-                if (bufferWithoutMetadata.length <= 0) return;
-                const base64buffer = message.toString("base64");
-                wss.send(JSON.stringify({ type: "media", msg: base64buffer }));
-              } catch (err) {
-                console.log(`Error in media : ${err}`);
-              }
-              break;
-            case "pause":
-              wss.send(JSON.stringify({ type: "pause", msg: "pause" }));
-              break;
-            case "contunue":
-              wss.send(JSON.stringify({ type: "continue", msg: "continue" }));
-              break;
-            case "clear":
-              wss.send(JSON.stringify({ type: "clear", msg: "clear" }));
-              break;
-            case "end":
-              wss.send(JSON.stringify({ type: "end", msg: "end" }));
-              break;
-            case "ready":
-              wss.send(JSON.stringify({ type: "ready", msg: "connected" }));
-              break;
-            default:
-              break;
-          }
+              // if (sequence_id === "-2") {
+              //   // Transcript for User
+              //   console.log("User : ", transcript);
+              // } else if (sequence_id !== "0" && sequence_id !== "-1") {
+              //   // Transcript for AI
+              //   console.log("AI : ", transcript);
+              // }
+              const base64buffer = message.toString("base64");
+              wss.send(JSON.stringify({ type: "media", msg: base64buffer }));
+            } catch (err) {
+              console.log(`Error in media : ${err}`);
+            }
+            break;
+          case "pause":
+            wss.send(JSON.stringify({ type: "pause", msg: "pause" }));
+            break;
+          case "continue":
+            wss.send(JSON.stringify({ type: "continue", msg: "continue" }));
+            break;
+          case "clear":
+            wss.send(JSON.stringify({ type: "clear", msg: "clear" }));
+            break;
+          case "end":
+            wss.send(JSON.stringify({ type: "end", msg: "end" }));
+            break;
+          case "ready":
+            wss.send(JSON.stringify({ type: "ready", msg: "connected" }));
+            break;
+          default:
+            break;
         }
       } catch (error) {
         console.error(`Error in onmessage : ${error}`);
